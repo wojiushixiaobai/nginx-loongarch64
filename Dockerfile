@@ -3,47 +3,46 @@ WORKDIR /opt
 ARG VERSION=1.24.0
 
 ARG BUILD_DEPENDENCIES="         \
-        build-essential          \
         ca-certificates          \
         cmake                    \
         curl                     \
-        debhelper                \
         devscripts               \
+        equivs                   \
         git                      \
+        libxml2-utils            \
         lsb-release              \
         make                     \
         mercurial                \
-        quilt                    \
-        xsltproc                 \
-        zlib1g-dev"
-
-ARG DEPENDENCIES="               \
-        libc-ares-dev            \
-        libedit-dev              \
-        libgeoip-dev             \
-        libgd-dev                \
-        libparse-recdescent-perl \
-        libpcre2-dev             \
-        libperl-dev              \
-        libre2-dev               \
-        libssl-dev               \
-        libxml2-utils            \
-        libxslt1-dev"
+        xsltproc"
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN set -ex \
     && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get update \
-    && apt-get install -y $BUILD_DEPENDENCIES \
-    && apt-get install -y $DEPENDENCIES \
+    && apt-get install -y --no-install-recommends $BUILD_DEPENDENCIES \
     && echo "no" | dpkg-reconfigure dash \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -ex \
-    && hg clone -u ${VERSION}-1 http://hg.nginx.org/pkg-oss
+    && apt-get update \
+    && hg clone -u ${VERSION}-1 http://hg.nginx.org/pkg-oss \
+    && cp -R /opt/pkg-oss /opt/nginx-build \
+    && cd /opt/nginx-build/debian \
+    && make rules \
+    && \
+    for f in debuild-module-*/nginx-${VERSION}/debian/control; do \
+        mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i ${f}; \
+    done \
+    && cd /opt \
+    && rm -rf /opt/nginx-build \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/pkg-oss
 
 RUN set -ex \
-    && cd /opt/pkg-oss/debian \
+    && cd debian \
     && make all
 
 RUN set -ex \
